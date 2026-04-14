@@ -119,7 +119,7 @@ WorldInfo {
 }
 Viewpoint {
   orientation 0.1498271496128066 -0.006568673119068244 -0.9886903851926327 3.228210843851661
-  position 39.636259271867786 29.183959565253794 37.5324188708987
+  position 11.77067633050273 31.631452700717073 28.855070860735733
   near 1
   follow "vehicle"
   followSmoothness 0
@@ -607,6 +607,8 @@ BmwX5 {
     }
   ]
   sensorsSlotTop [
+    Lidar {
+    }
     Camera {
       translation 0.72 0 -0.05
       children [
