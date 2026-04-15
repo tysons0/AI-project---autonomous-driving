@@ -54,36 +54,39 @@ void set_steering_angle(double wheel_angle) {
   wbu_driver_set_steering_angle(wheel_angle);
 }
 
-// ================== LIDAR AVOIDANCE LOGIC ==================
+//lidar avoidance logic
 double get_lidar_avoidance_steering() {
   if (!enable_collision_avoidance) return UNKNOWN;
 
   const float *range_array = wb_lidar_get_range_image(sick);
   int mid = sick_width / 2;
   
-  // WIDER VISION: Scan middle 90 degrees (1/4 of the indices for 180 FOV)
+  //scan middle 90 degrees (1/4 of the indices for 180 FOV)
   int scan_range = sick_width / 4; 
   int start = mid - scan_range;
   int end = mid + scan_range;
 
   double left_danger = 0.0, right_danger = 0.0;
   bool obstacle_detected = false;
+  
 
   for (int i = start; i < end; i++) {
     float dist = range_array[i];
+    
+    //wall limitation: will avoid every object
     if (dist < OBSTACLE_THRESHOLD) { 
       obstacle_detected = true;
-      double weight = OBSTACLE_THRESHOLD - dist;
-      if (i < mid) left_danger += weight;
-      else right_danger += weight;
+      double weight = OBSTACLE_THRESHOLD - dist;   //objects closer = higher weight
+      if (i < mid) left_danger += weight;          //summing danger on left
+      else right_danger += weight;                 //summing danger on right
     }
   }
-
+//resulting steering decision
   return obstacle_detected ? (left_danger - right_danger) * LNAV_GAIN : UNKNOWN;
 }
 
-// ================== CAMERA LINE FOLLOW ==================
-int color_diff(const unsigned char a[3], const unsigned char b[3]) {
+//camera line follow
+int color_diff(const unsigned char a[3], const unsigned char b[3]) {  //color heuristic
   int diff = 0;
   for (int i = 0; i < 3; i++) diff += abs(a[i] - b[i]);
   return diff;
@@ -93,8 +96,8 @@ double process_camera_image(const unsigned char *image) {
   const unsigned char REF[3] = {95, 187, 203}; 
   int sumx = 0, count = 0;
   for (int i = 0; i < camera_width * camera_height; i++, image += 4) {
-    if (color_diff(image, REF) < 30) {
-      sumx += i % camera_width;
+    if (color_diff(image, REF) < 30) {    //color heuristic
+      sumx += i % camera_width;           //calculating horizontal center of line
       count++;
     }
   }
@@ -165,12 +168,13 @@ int main(int argc, char **argv) {
   safe_print("90 DEGREE VISION - CAUTION MODE");
 
   while (wbu_driver_step() != -1) {
+  //priority 1: lidar navigation
     double avoidance_steer = get_lidar_avoidance_steering();
 
     if (avoidance_steer != UNKNOWN) {
-      set_speed(ETHICAL_SPEED);
+      set_speed(ETHICAL_SPEED);              //safety speed
       wbu_driver_set_brake_intensity(0.0);
-      set_steering_angle(avoidance_steer);
+      set_steering_angle(avoidance_steer);   //safety turn depending on object proximity
       
       const float *ranges = wb_lidar_get_range_image(sick);
       if (ranges[sick_width/2] < 5.0) {
@@ -181,12 +185,13 @@ int main(int argc, char **argv) {
       }
       PID_need_reset = true; 
     }  
+    //priority 2: camera navigation
     else if (autodrive && has_camera) {
-      const unsigned char *image = wb_camera_get_image(camera);
+      const unsigned char *image = wb_camera_get_image(camera);  
       double line_angle = filter_angle(process_camera_image(image));
 
       if (line_angle != UNKNOWN) {
-        set_speed(NORMAL_SPEED);
+        set_speed(NORMAL_SPEED);                   //regular speed
         wbu_driver_set_brake_intensity(0.0);
         set_steering_angle(applyPID(line_angle));
       } else {
